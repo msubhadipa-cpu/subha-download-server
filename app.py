@@ -64,7 +64,9 @@ async def download(ident, url):
             proc = await asyncio.create_subprocess_exec(*command,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
             out, err = await asyncio.wait_for(proc.communicate(), timeout=240)
             if proc.returncode:
-                details = err.decode(errors='replace').lower()
+                safe_error = re.sub(r'https?://\S+', '[url]', err.decode(errors='replace'))[-1000:]
+                print('Extractor detail:', safe_error, flush=True)
+                details = safe_error.lower()
                 if 'confirm' in details and ('bot' in details or 'sign in' in details): raise RuntimeError('platform_bot_check')
                 raise RuntimeError('extractor_failed')
             files = [p for p in folder.iterdir() if p.suffix in ('.mp4','.webm','.mkv','.mov','.m4v') and p.is_file()]
