@@ -68,7 +68,10 @@ async def download(ident, url):
                 safe_error = re.sub(r'https?://\S+', '[url]', err.decode(errors='replace'))[-6000:]
                 print('Extractor detail:', safe_error, flush=True)
                 details = safe_error.lower()
+                if '429' in details: raise RuntimeError('platform_rate_limited')
                 if 'confirm' in details and ('bot' in details or 'sign in' in details): raise RuntimeError('platform_bot_check')
+                if '403' in details: raise RuntimeError('platform_access_denied')
+                if 'video unavailable' in details or 'has been removed' in details: raise RuntimeError('video_unavailable')
                 raise RuntimeError('extractor_failed')
             files = [p for p in folder.iterdir() if p.suffix in ('.mp4','.webm','.mkv','.mov','.m4v') and p.is_file()]
             if len(files)!=1 or not 0 < files[0].stat().st_size <= 250*1024*1024: raise RuntimeError('no_file')
@@ -78,7 +81,15 @@ async def download(ident, url):
             if proc and proc.returncode is None:
                 proc.kill()
                 await proc.communicate()
-            job.update(state='failed',message='ভিডিও আনা যায়নি। ভিডিওটি পাবলিক কিনা যাচাই করো। প্ল্যাটফর্মের সীমাবদ্ধতা বা সার্ভারের IP ব্লক থাকলেও এটি হতে পারে।')
+            reason = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
+            messages = {
+                'platform_rate_limited': 'ভিডিও প্ল্যাটফর্ম এই সার্ভারের অনুরোধ সীমিত করেছে (429)। এখন ভিডিওটি আনা যাচ্ছে না। কিছু সময় পরে চেষ্টা করো।',
+                'platform_access_denied': 'ভিডিও প্ল্যাটফর্ম এই সার্ভারের অনুরোধে অনুমতি দিচ্ছে না (403)। এই সার্ভার থেকে ভিডিওটি ডাউনলোড করা যাচ্ছে না।',
+                'platform_bot_check': 'প্ল্যাটফর্ম সার্ভারের অনুরোধে যাচাই চাইছে। এখানে ওই ভিডিওটি ডাউনলোড করা যাচ্ছে না।',
+                'video_unavailable': 'ভিডিওটি পাওয়া যাচ্ছে না। লিংকটি পাবলিক এবং এখনো চালু আছে কিনা যাচাই করো।',
+                'TimeoutError': 'ভিডিও আনার সময় শেষ হয়েছে। ছোট ভিডিও দিয়ে আবার চেষ্টা করো।'
+            }
+            job.update(state='failed',code=reason,message=messages.get(reason,'ভিডিও আনা যায়নি। লিংকটি সমর্থিত ও পাবলিক কিনা যাচাই করো।'))
             shutil.rmtree(folder,ignore_errors=True)
 
 @app.get('/auth', dependencies=[Depends(auth)])
