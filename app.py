@@ -1,5 +1,6 @@
 import asyncio, contextlib, hmac, json, os, re, secrets, shutil, tempfile, time, uuid
 from pathlib import Path
+from importlib.metadata import version
 from urllib.parse import urlsplit
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, HTTPException, Depends
@@ -50,7 +51,7 @@ class VideoRequest(BaseModel):
     url: str
 
 @app.get('/health')
-def health(): return {'service':'subha-videosave','version':1}
+def health(): return {'service':'subha-videosave','version':2,'engine_version':version('yt-dlp')}
 
 async def download(ident, url):
     job = JOBS[ident]
@@ -58,13 +59,13 @@ async def download(ident, url):
         job['state'] = 'working'
         folder = ROOT / ident
         folder.mkdir()
-        command = ['yt-dlp','--ignore-config','--js-runtimes','node','--no-playlist','--no-progress','--no-warnings','--socket-timeout','20','--retries','1','--max-filesize','250M','--match-filters','!is_live & duration < 3600','-f','bv*[height<=1080]+ba/b[height<=1080]/b','--merge-output-format','mp4','--print','after_move:filepath','-o',str(folder/'video.%(ext)s'),'--',url]
+        command = ['yt-dlp','--ignore-config','--js-runtimes','node','--no-playlist','--no-progress','--extractor-retries','1','--socket-timeout','20','--retries','1','--max-filesize','250M','--match-filters','!is_live & duration < 3600','-f','bv*[height<=1080]+ba/b[height<=1080]/b','--merge-output-format','mp4','--print','after_move:filepath','-o',str(folder/'video.%(ext)s'),'--',url]
         proc = None
         try:
             proc = await asyncio.create_subprocess_exec(*command,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
             out, err = await asyncio.wait_for(proc.communicate(), timeout=240)
             if proc.returncode:
-                safe_error = re.sub(r'https?://\S+', '[url]', err.decode(errors='replace'))[-1000:]
+                safe_error = re.sub(r'https?://\S+', '[url]', err.decode(errors='replace'))[-6000:]
                 print('Extractor detail:', safe_error, flush=True)
                 details = safe_error.lower()
                 if 'confirm' in details and ('bot' in details or 'sign in' in details): raise RuntimeError('platform_bot_check')
