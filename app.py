@@ -51,7 +51,7 @@ class VideoRequest(BaseModel):
     url: str
 
 @app.get('/health')
-def health(): return {'service':'subha-videosave','version':2,'engine_version':version('yt-dlp')}
+def health(): return {'service':'subha-videosave','version':3,'engine_version':version('yt-dlp')}
 
 async def download(ident, url):
     job = JOBS[ident]
@@ -71,6 +71,7 @@ async def download(ident, url):
                 if '429' in details: raise RuntimeError('platform_rate_limited')
                 if 'confirm' in details and ('bot' in details or 'sign in' in details): raise RuntimeError('platform_bot_check')
                 if '403' in details: raise RuntimeError('platform_access_denied')
+                if 'logged-in' in details or 'login required' in details or 'provide account credentials' in details: raise RuntimeError('platform_login_required')
                 if 'video unavailable' in details or 'has been removed' in details: raise RuntimeError('video_unavailable')
                 raise RuntimeError('extractor_failed')
             files = [p for p in folder.iterdir() if p.suffix in ('.mp4','.webm','.mkv','.mov','.m4v') and p.is_file()]
@@ -87,6 +88,7 @@ async def download(ident, url):
                 'platform_access_denied': 'ভিডিও প্ল্যাটফর্ম এই সার্ভারের অনুরোধে অনুমতি দিচ্ছে না (403)। এই সার্ভার থেকে ভিডিওটি ডাউনলোড করা যাচ্ছে না।',
                 'platform_bot_check': 'প্ল্যাটফর্ম সার্ভারের অনুরোধে যাচাই চাইছে। এখানে ওই ভিডিওটি ডাউনলোড করা যাচ্ছে না।',
                 'video_unavailable': 'ভিডিওটি পাওয়া যাচ্ছে না। লিংকটি পাবলিক এবং এখনো চালু আছে কিনা যাচাই করো।',
+                'platform_login_required': 'এই ভিডিও আনার জন্য প্ল্যাটফর্মে লগইন প্রয়োজন। এই সাইটে ব্যক্তিগত অ্যাকাউন্ট বা কুকি যুক্ত করা নেই, তাই ভিডিওটি ডাউনলোড করা যাচ্ছে না।',
                 'TimeoutError': 'ভিডিও আনার সময় শেষ হয়েছে। ছোট ভিডিও দিয়ে আবার চেষ্টা করো।'
             }
             job.update(state='failed',code=reason,message=messages.get(reason,'ভিডিও আনা যায়নি। লিংকটি সমর্থিত ও পাবলিক কিনা যাচাই করো।'))
